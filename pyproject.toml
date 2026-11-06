@@ -3,14 +3,23 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai-italo-generator"
+name = "ai-italo-music"
 version = "0.1.0"
-description = "Generate original instrumental Italo-disco-inspired music with AI."
+description = "Generate instrumental Italo-disco-inspired variations from uploaded music loops."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=1.26,<3",
+    "soundfile>=0.12",
+]
 
 [project.optional-dependencies]
+musicgen = [
+    "accelerate>=1.2",
+    "librosa>=0.10.2",
+    "torch>=2.7",
+    "transformers>=4.46",
+]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]

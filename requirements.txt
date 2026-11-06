@@ -1,0 +1,3 @@
+# Install PyTorch using the command selected for your hardware at pytorch.org.
+# This installs the project, MusicGen inference libraries, and development tools.
+-e .[musicgen,dev]

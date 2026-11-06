@@ -2,77 +2,93 @@
 
 ## Goal
 
-Build a small, reliable tool that creates original Italo-disco-inspired instrumental music with AI. The first release will not generate vocals, lyrics, or singing.
+Let a user upload a short music loop and generate a set of instrumental variations that retain useful musical material while exploring different arrangements and sounds. Italo-disco is the target style. Vocals are out of scope.
 
-## MVP boundaries
+Text prompts are not part of the first prototype. First establish whether conditioning on the uploaded audio can produce variations that sound useful; add prompt controls after that is demonstrated.
 
-**In scope**
+## MVP scope
 
-- Text prompt describing the desired instrumental track.
-- Useful controls for generation, starting with duration and random seed; add tempo and other controls when supported by the selected model.
-- Save generated music as WAV, with clear progress and useful error messages.
-- A documented local workflow that does not require users to publish their generated files.
+- Accept a short audio loop in common formats.
+- Validate and prepare it for the selected model without changing its musical content unnecessarily.
+- Generate several variations from the same source, with repeatable seeds where supported.
+- Preview and export the generated audio as WAV.
+- Keep each result associated with its source and generation settings.
 
-**Out of scope for the first release**
+**Not in the MVP:** vocals, lyric generation, user-authored prompts, model training, hosted accounts, advanced mastering, or claims of commercial clearance.
 
-- Vocals, lyrics, speech, or voice cloning.
-- Training a foundation model from scratch.
-- A hosted service, user accounts, or a complex graphical interface.
-- Claims of commercial clearance until the model and its license have been verified.
+## Proposed libraries
 
-## Proposed milestones
+| Need | Proposed library/tool | Role |
+|---|---|---|
+| Model inference | **PyTorch** + **Hugging Face Transformers** | Load and run a candidate audio-conditioned music model. Keep this behind a model adapter so another model can be evaluated without rewriting the app. Install a PyTorch build that matches the actual CPU/GPU environment. |
+| First model to benchmark | **MusicGen Melody** through Transformers | A candidate for melody/audio-guided variation. Treat it as an experiment, not a confirmed fit: assess whether it changes the arrangement in the desired way, not just whether it follows the source melody. |
+| Audio arrays | **NumPy** | Represent, validate, and pass waveform data between audio I/O and inference. |
+| WAV I/O | **SoundFile** (`soundfile`) | Read/write uncompressed WAV and inspect sample rates/channels. Use it for the canonical internal/export format. |
+| Upload format decoding | **FFmpeg** executable | Decode common user uploads (such as MP3) and convert to the model's required input format. Install/test the executable separately; a Python wrapper does not replace it. |
+| Optional loop analysis | **librosa** | Use only if benchmarks need BPM/beat-grid estimates, trimming, or audio features. It is not the music generator and should not be required for basic file conversion. |
+| Tests | **pytest** | Test input validation, conversion, variation metadata, and export without loading a large model. |
+| Later local UI | **Gradio** | Add a simple upload, progress, preview, and download interface after the generation path works. Not needed for the first library/model experiment. |
 
-### 1. Choose the generation approach
+### Dependency strategy
 
-- Compare suitable text-to-music models for instrumental quality, prompt adherence, local inference support, hardware requirements, and license terms.
-- Test short prompts for Italo-disco-inspired arrangements and confirm a reliable way to request instrumental-only output.
-- Decide whether inference is local-first or uses an external service; record privacy, cost, and hardware tradeoffs.
-- Keep model-specific code behind a small generation interface so the rest of the app is not tied to one provider.
+- Start with a small, model-independent audio layer (`numpy`, `soundfile`) and an FFmpeg system dependency.
+- Keep `torch`, `transformers`, and model-support packages in the optional `musicgen` extra. Install the PyTorch build that matches the actual CPU/GPU environment using its official selector.
+- Do not add `audiocraft`, `torchaudio`, `diffusers`, or a web framework by default. Add one only if the selected model or implemented feature requires it.
+- The project Python requirement is 3.11 or newer. `requirements.txt` installs the project, MusicGen inference extra, and test tools; the PyTorch install must still match the user's hardware.
+- Keep model weights and generated audio out of Git; store results in an ignored output directory.
 
-**Exit criteria:** a chosen model and runtime, a documented setup path, and a short sample that meets the instrumental requirement.
+## Model fit and quality constraints
 
-### 2. Establish a reproducible generation baseline
+MusicGen Melody is a reasonable first benchmark because its model card demonstrates generation guided by an audio melody. It is not yet a decision: melody guidance is not necessarily the same as turning an arbitrary uploaded loop into a convincing, stylistically consistent arrangement.
 
-- Create a minimal command-line workflow from prompt to audio file.
-- Support a fixed random seed where available and validate duration and output path inputs.
-- Convert model output to a consistent WAV format and verify sample rate, channels, duration, and non-empty audio.
-- Surface model download, device, and inference errors rather than silently returning placeholder audio.
+The Transformers MusicGen documentation describes audio-prompted generation with a 30-second total context limit, where the provided audio prompt counts toward that limit. This makes short loops a more suitable first test and may constrain longer arrangements. The documented MusicGen checkpoints use a 32 kHz audio codec, so exporting at a higher sample rate or bit depth does not restore detail that was not generated.
 
-**Exit criteria:** a documented command produces a playable WAV with reproducible settings where the model supports them.
+**License constraint:** the MusicGen Melody model card lists the checkpoint weights as CC-BY-NC 4.0. This is a non-commercial license; this checkpoint is not suitable for a commercial product unless the rights situation changes and is reviewed. The software libraries' licenses do not override the model weights' license.
 
-### 3. Add Italo-disco controls and iteration
+Before adopting any model, verify its current license and intended-use terms, hardware/memory requirements, supported Python and PyTorch versions, audio-conditioning behavior, and whether its output quality is adequate for the project's distribution goals.
 
-- Refine prompt templates for genre traits without relying on named-artist imitation.
-- Add supported controls (for example tempo, mood, instrumentation, and duration) and preserve the original prompt in generation metadata.
-- Provide a small set of prompt examples and a repeatable listening/evaluation checklist.
-- Measure generation time and memory use on the intended development hardware.
+## Milestones
 
-**Exit criteria:** users can steer a generated instrumental meaningfully and compare results across seeds.
+### 1. Audio-conditioned model benchmark
 
-### 4. Improve usability and quality
+- Test a small set of short, rights-cleared loop examples with MusicGen Melody.
+- Generate multiple seeds per input using a fixed internal conditioning setup; user-authored prompts remain deferred.
+- Compare against at least one alternative audio-to-audio or melody-conditioned model if the first results do not meet the variation goal.
+- Evaluate source relationship, musical coherence, artifacts, output duration, generation speed, memory use, and license.
 
-- Add batch variations and simple preview/playback only if the basic CLI workflow is reliable.
-- Consider audio post-processing such as loudness normalization only after testing that it does not damage generated output.
-- Document model attribution, license constraints, output ownership caveats, and safe handling of downloaded model assets.
-- Add automated tests for input validation, file writing, and model-independent audio handling.
+**Exit criteria:** choose a model only if listening tests show consistently useful loop-conditioned variations on the available hardware.
 
-**Exit criteria:** installation, generation, and troubleshooting are understandable to a new user.
+### 2. Audio ingestion and generation core
 
-## Technical shape (provisional)
+- Implement upload validation and a single canonical audio representation.
+- Decode supported formats with FFmpeg; preserve the original upload and make any resampling/channel conversion explicit.
+- Define a model adapter taking prepared source audio and variation settings, returning audio plus metadata.
+- Export playable WAV variations and report conversion/model failures explicitly.
 
-- Python package with a small CLI as the first interface.
-- A model adapter separates prompt/settings and inference from WAV export and application logic.
-- Keep large model weights and generated audio out of version control; store generated files under an ignored `outputs/` directory by default.
-- Delay GPU/framework dependencies until the model choice is made. Record tested Python, operating system, and device requirements at that point.
+**Exit criteria:** one source loop reliably produces a named set of valid, playable variations.
 
-## Decisions to make before implementation
+### 3. Basic user workflow
 
-1. **Inference:** local model, hosted API, or support both?
-2. **Hardware target:** CPU-only compatibility, a specific GPU class, or cloud inference?
-3. **Output:** WAV only for MVP, or also compressed formats?
-4. **Use and distribution:** personal experimentation, or a release intended for broader/commercial use? This affects model/license selection and documentation.
-5. **Interface:** CLI-first (recommended for MVP) or a browser-based UI?
+- Add preview, progress reporting, and download of individual variations or a set.
+- Save source filename, model identifier, seed, input conversion details, and generation settings with each result.
+- Add a simple local UI only after the core is stable; Gradio is the proposed lightweight option.
+
+**Exit criteria:** a user can upload, generate, compare, and retrieve results without command-line audio handling.
+
+### 4. Prompts and studio workflow
+
+- Add user-authored prompts as an optional control and measure whether they improve results without overriding the uploaded loop.
+- Add production exports and optional stems only if the chosen model supports meaningful stem separation or stem generation.
+- Add loudness/peak checks and higher-quality formats based on measured model output, not upsampling alone.
 
 ## First implementation task
 
-Evaluate candidate models against the milestone 1 criteria, using short instrumental prompts and documenting quality, runtime, hardware, and license evidence before adding heavyweight dependencies.
+Build a small benchmark harness for the input-loop workflow with `soundfile`, NumPy, FFmpeg, pytest, and a candidate PyTorch/Transformers MusicGen Melody adapter. Keep generation dependencies optional until the model and hardware compatibility are confirmed.
+
+## References
+
+- [Transformers MusicGen documentation](https://huggingface.co/docs/transformers/main/en/model_doc/musicgen)
+- [MusicGen Melody model card](https://huggingface.co/facebook/musicgen-melody)
+- [SoundFile documentation](https://python-soundfile.readthedocs.io/)
+- [librosa documentation](https://librosa.org/doc/latest/index.html)
+- [PyTorch local installation selector](https://pytorch.org/get-started/locally/)
