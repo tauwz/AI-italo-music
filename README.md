@@ -4,7 +4,7 @@ A Python project for generating original, instrumental Italo-disco-inspired musi
 
 ## Status
 
-Planning and project setup. No generation model has been selected or integrated yet.
+Planning and project setup.
 
 ## Getting started
 
